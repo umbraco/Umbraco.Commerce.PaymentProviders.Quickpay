@@ -13,7 +13,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
     {
         protected ILogger<TSelf> Logger { get; }
 
-        public QuickpayPaymentProviderBase(UmbracoCommerceContext ctx,
+        protected QuickpayPaymentProviderBase(UmbracoCommerceContext ctx,
             ILogger<TSelf> logger)
             : base(ctx)
         {
