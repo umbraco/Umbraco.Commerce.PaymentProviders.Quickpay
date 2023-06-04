@@ -417,7 +417,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
                 using (var reader = new StreamReader(stream))
                 {
-                    var json = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+                    var json = await reader.ReadToEndAsync().ConfigureAwait(false);
 
                     // Deserialize json body text 
                     return JsonConvert.DeserializeObject<QuickpayPayment>(json);
