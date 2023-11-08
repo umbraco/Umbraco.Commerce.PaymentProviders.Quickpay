@@ -137,7 +137,9 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                             CallbackUrl = ctx.Urls.CallbackUrl,
                             PaymentMethods = paymentMethods?.Length > 0 ? string.Join(",", paymentMethods) : null,
                             AutoFee = ctx.Settings.AutoFee,
-                            AutoCapture = ctx.Settings.AutoCapture
+                            AutoCapture = ctx.Settings.AutoCapture,
+                            Framed = ctx.Settings.Framed
+                            
                         },
                         cancellationToken).ConfigureAwait(false);
 
