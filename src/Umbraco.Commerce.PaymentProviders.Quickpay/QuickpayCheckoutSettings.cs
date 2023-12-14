@@ -13,5 +13,10 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             Description = "Flag indicating whether to immediately capture the payment, or whether to just authorize the payment for later (manual) capture.",
             SortOrder = 1200)]
         public bool AutoCapture { get; set; }
+
+        [PaymentProviderSetting(Name = "Framed",
+            Description = "Flag indicating whether to allow opening payment page in iframe.",
+            SortOrder = 1300)]
+        public bool Framed { get; set; }
     }
 }
