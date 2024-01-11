@@ -1,4 +1,3 @@
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,15 +5,16 @@ using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Umbraco.Commerce.Common.Logging;
-using Umbraco.Commerce.PaymentProviders.Quickpay.Api;
-using Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models;
 using Umbraco.Commerce.Core.Api;
 using Umbraco.Commerce.Core.Models;
 using Umbraco.Commerce.Core.PaymentProviders;
 using Umbraco.Commerce.Extensions;
-using System.Threading;
+using Umbraco.Commerce.PaymentProviders.Quickpay.Api;
+using Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models;
 
 namespace Umbraco.Commerce.PaymentProviders.Quickpay
 {
@@ -74,7 +74,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
                     var clientConfig = GetQuickpayClientConfig(ctx.Settings);
                     var client = new QuickpayClient(clientConfig);
-                    
+
                     var reference = ctx.Order.OrderNumber;
 
                     // Quickpay has a limit of order id between 4-20 characters.
@@ -125,22 +125,22 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                             Variables = metaData
                         },
                         cancellationToken).ConfigureAwait(false);
-                    
+
                     quickPayPaymentId = GetTransactionId(payment);
 
                     var paymentLink = await client.CreatePaymentLinkAsync(payment.Id.ToString(), new QuickpayPaymentLinkRequest
-                        {
-                            Amount = orderAmount,
-                            Language = lang.ToString(),
-                            ContinueUrl = ctx.Urls.ContinueUrl,
-                            CancelUrl = ctx.Urls.CancelUrl,
-                            CallbackUrl = ctx.Urls.CallbackUrl,
-                            PaymentMethods = paymentMethods?.Length > 0 ? string.Join(",", paymentMethods) : null,
-                            AutoFee = ctx.Settings.AutoFee,
-                            AutoCapture = ctx.Settings.AutoCapture,
-                            Framed = ctx.Settings.Framed
-                            
-                        },
+                    {
+                        Amount = orderAmount,
+                        Language = lang.ToString(),
+                        ContinueUrl = ctx.Urls.ContinueUrl,
+                        CancelUrl = ctx.Urls.CancelUrl,
+                        CallbackUrl = ctx.Urls.CallbackUrl,
+                        PaymentMethods = paymentMethods?.Length > 0 ? string.Join(",", paymentMethods) : null,
+                        AutoFee = ctx.Settings.AutoFee,
+                        AutoCapture = ctx.Settings.AutoCapture,
+                        Framed = ctx.Settings.Framed
+
+                    },
                         cancellationToken).ConfigureAwait(false);
 
                     paymentFormLink = paymentLink.Url;
@@ -231,7 +231,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
         private bool VerifyOrder(OrderReadOnly order, QuickpayPayment payment)
         {
-            if (payment.Variables.Count > 0 && 
+            if (payment.Variables.Count > 0 &&
                 payment.Variables.TryGetValue("orderReference", out string orderReference))
             {
                 if (order.GenerateOrderReference() == orderReference)
@@ -421,8 +421,8 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                 {
                     var json = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
 
-                    // Deserialize json body text 
-                    return JsonConvert.DeserializeObject<QuickpayPayment>(json);
+                    // Deserialize json body text
+                    return JsonSerializer.Deserialize<QuickpayPayment>(json);
                 }
             }
         }
@@ -432,7 +432,8 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             var json = await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var checkSum = request.Headers.GetValues("Quickpay-Checksum-Sha256").FirstOrDefault();
 
-            if (string.IsNullOrEmpty(checkSum)) return false;
+            if (string.IsNullOrEmpty(checkSum))
+                return false;
 
             var calculatedChecksum = Checksum(json, privateAccountKey);
 

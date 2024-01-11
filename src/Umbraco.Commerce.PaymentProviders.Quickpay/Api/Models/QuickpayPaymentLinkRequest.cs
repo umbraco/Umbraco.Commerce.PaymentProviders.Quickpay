@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models
 {
@@ -7,55 +7,55 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models
         /// <summary>
         /// Amount to authorize
         /// </summary>
-        [JsonProperty("amount")]
+        [JsonPropertyName("amount")]
         public decimal Amount { get; set; }
 
         /// <summary>
         /// Language
         /// </summary>
-        [JsonProperty("language")]
+        [JsonPropertyName("language")]
         public string Language { get; set; }
 
         /// <summary>
         /// URL that cardholder is redirected to after authorize.
         /// </summary>
-        [JsonProperty("continue_url")]
+        [JsonPropertyName("continue_url")]
         public string ContinueUrl { get; set; }
 
         /// <summary>
         /// URL that cardholder is redirected to after cancelation.
         /// </summary>
-        [JsonProperty("cancel_url")]
+        [JsonPropertyName("cancel_url")]
         public string CancelUrl { get; set; }
 
         /// <summary>
         /// Endpoint for async callback.
         /// </summary>
-        [JsonProperty("callback_url")]
+        [JsonPropertyName("callback_url")]
         public string CallbackUrl { get; set; }
 
         /// <summary>
         /// Limit payment methods.
         /// </summary>
-        [JsonProperty("payment_methods")]
+        [JsonPropertyName("payment_methods")]
         public string PaymentMethods { get; set; }
 
         /// <summary>
         /// Add acquirer fee to amount. Default is merchant autofee.
         /// </summary>
-        [JsonProperty("auto_fee")]
+        [JsonPropertyName("auto_fee")]
         public bool? AutoFee { get; set; }
 
         /// <summary>
         /// When true, payment is captured after authorization. Default is false.
         /// </summary>
-        [JsonProperty("auto_capture")]
+        [JsonPropertyName("auto_capture")]
         public bool? AutoCapture { get; set; }
 
         /// <summary>
         /// Allow opening in iframe. Default is false.
         /// </summary>
-        [JsonProperty("framed")]
+        [JsonPropertyName("framed")]
         public bool? Framed { get; set; }
     }
 }

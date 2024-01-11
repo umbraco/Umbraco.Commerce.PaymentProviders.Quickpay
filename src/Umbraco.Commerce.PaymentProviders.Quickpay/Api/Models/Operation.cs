@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models
 {
@@ -7,49 +7,49 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models
         /// <summary>
         /// Operation ID
         /// </summary>
-        [JsonProperty("id")]
+        [JsonPropertyName("id")]
         public int Id { get; set; }
 
         /// <summary>
         /// Type of operation
         /// </summary>
-        [JsonProperty("type")]
+        [JsonPropertyName("type")]
         public string Type { get; set; }
 
         /// <summary>
         /// Amount
         /// </summary>
-        [JsonProperty("amount")]
+        [JsonPropertyName("amount")]
         public int Amount { get; set; }
 
         /// <summary>
         /// If the operation is pending
         /// </summary>
-        [JsonProperty("pending")]
+        [JsonPropertyName("pending")]
         public bool Pending { get; set; }
 
         /// <summary>
         /// Quickpay status code
         /// </summary>
-        [JsonProperty("qp_status_code")]
+        [JsonPropertyName("qp_status_code")]
         public string QuickpayStatusCode { get; set; }
 
         /// <summary>
         /// Quickpay status message
         /// </summary>
-        [JsonProperty("qp_status_msg")]
+        [JsonPropertyName("qp_status_msg")]
         public string QuickpayStatusMessage { get; set; }
 
         /// <summary>
         /// Acquirer status code
         /// </summary>
-        [JsonProperty("aq_status_code")]
+        [JsonPropertyName("aq_status_code")]
         public string AcquirerStatusCode { get; set; }
 
         /// <summary>
         /// Acquirer status message
         /// </summary>
-        [JsonProperty("aq_status_msg")]
+        [JsonPropertyName("aq_status_msg")]
         public string AcquirerStatusMessage { get; set; }
     }
 }
