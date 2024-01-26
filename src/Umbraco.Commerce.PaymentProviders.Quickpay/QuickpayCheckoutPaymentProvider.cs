@@ -1,4 +1,3 @@
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,21 +5,24 @@ using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Umbraco.Commerce.Common.Logging;
-using Umbraco.Commerce.PaymentProviders.Quickpay.Api;
-using Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models;
 using Umbraco.Commerce.Core.Api;
 using Umbraco.Commerce.Core.Models;
 using Umbraco.Commerce.Core.PaymentProviders;
 using Umbraco.Commerce.Extensions;
-using System.Threading;
+using Umbraco.Commerce.PaymentProviders.Quickpay.Api;
+using Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models;
 
 namespace Umbraco.Commerce.PaymentProviders.Quickpay
 {
     [PaymentProvider("quickpay-v10-checkout", "Quickpay V10", "Quickpay V10 payment provider for one time payments")]
     public class QuickpayCheckoutPaymentProvider : QuickpayPaymentProviderBase<QuickpayCheckoutPaymentProvider, QuickpayCheckoutSettings>
     {
+        private const string QuickpayStatusCodeApproved = "20000";
+
         public QuickpayCheckoutPaymentProvider(UmbracoCommerceContext ctx, ILogger<QuickpayCheckoutPaymentProvider> logger)
             : base(ctx, logger)
         { }
@@ -74,7 +76,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
                     var clientConfig = GetQuickpayClientConfig(ctx.Settings);
                     var client = new QuickpayClient(clientConfig);
-                    
+
                     var reference = ctx.Order.OrderNumber;
 
                     // Quickpay has a limit of order id between 4-20 characters.
@@ -125,22 +127,22 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                             Variables = metaData
                         },
                         cancellationToken).ConfigureAwait(false);
-                    
+
                     quickPayPaymentId = GetTransactionId(payment);
 
                     var paymentLink = await client.CreatePaymentLinkAsync(payment.Id.ToString(), new QuickpayPaymentLinkRequest
-                        {
-                            Amount = orderAmount,
-                            Language = lang.ToString(),
-                            ContinueUrl = ctx.Urls.ContinueUrl,
-                            CancelUrl = ctx.Urls.CancelUrl,
-                            CallbackUrl = ctx.Urls.CallbackUrl,
-                            PaymentMethods = paymentMethods?.Length > 0 ? string.Join(",", paymentMethods) : null,
-                            AutoFee = ctx.Settings.AutoFee,
-                            AutoCapture = ctx.Settings.AutoCapture,
-                            Framed = ctx.Settings.Framed
-                            
-                        },
+                    {
+                        Amount = orderAmount,
+                        Language = lang.ToString(),
+                        ContinueUrl = ctx.Urls.ContinueUrl,
+                        CancelUrl = ctx.Urls.CancelUrl,
+                        CallbackUrl = ctx.Urls.CallbackUrl,
+                        PaymentMethods = paymentMethods?.Length > 0 ? string.Join(",", paymentMethods) : null,
+                        AutoFee = ctx.Settings.AutoFee,
+                        AutoCapture = ctx.Settings.AutoCapture,
+                        Framed = ctx.Settings.Framed
+
+                    },
                         cancellationToken).ConfigureAwait(false);
 
                     paymentFormLink = paymentLink.Url;
@@ -172,66 +174,74 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             };
         }
 
-        public override async Task<CallbackResult> ProcessCallbackAsync(PaymentProviderContext<QuickpayCheckoutSettings> ctx, CancellationToken cancellationToken = default)
+        public override async Task<CallbackResult> ProcessCallbackAsync(PaymentProviderContext<QuickpayCheckoutSettings> context, CancellationToken cancellationToken = default)
         {
             try
             {
-                if (await ValidateChecksumAsync(ctx.Request, ctx.Settings.PrivateKey, cancellationToken).ConfigureAwait(false))
+                ArgumentNullException.ThrowIfNull(context);
+                if (!await ValidateChecksumAsync(context.Request, context.Settings.PrivateKey, cancellationToken).ConfigureAwait(false))
                 {
-                    var payment = await ParseCallbackAsync(ctx.Request,
+                    Logger.Warn($"Quickpay [{context.Order.OrderNumber}] - Checksum validation failed");
+                    return CallbackResult.BadRequest();
+                }
+
+                QuickpayPayment payment = await ParseCallbackAsync(
+                        context.Request,
                         cancellationToken).ConfigureAwait(false);
 
-                    if (VerifyOrder(ctx.Order, payment))
-                    {
-                        // Get operations to check if payment has been approved
-                        var operation = payment.Operations.LastOrDefault();
-
-                        // Check if payment has been approved
-                        if (operation != null)
-                        {
-                            var totalAmount = operation.Amount;
-
-                            if (operation.QuickpayStatusCode == "20000" || operation.AcquirerStatusCode == "000")
-                            {
-                                var paymentStatus = GetPaymentStatus(operation);
-
-                                return new CallbackResult
-                                {
-                                    TransactionInfo = new TransactionInfo
-                                    {
-                                        AmountAuthorized = AmountFromMinorUnits(totalAmount),
-                                        TransactionId = GetTransactionId(payment),
-                                        PaymentStatus = paymentStatus
-                                    }
-                                };
-                            }
-                            else
-                            {
-                                Logger.Warn($"Quickpay [{ctx.Order.OrderNumber}] - Payment not approved. Quickpay status code: {operation.QuickpayStatusCode} ({operation.QuickpayStatusMessage}). Acquirer status code: {operation.AcquirerStatusCode} ({operation.AcquirerStatusMessage}).");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        Logger.Warn($"Quickpay [{ctx.Order.OrderNumber}] - Couldn't verify the order");
-                    }
-                }
-                else
+                if (!VerifyOrder(context.Order, payment))
                 {
-                    Logger.Warn($"Quickpay [{ctx.Order.OrderNumber}] - Checksum validation failed");
+                    Logger.Warn($"Quickpay [{context.Order.OrderNumber}] - Couldn't verify the order");
+                    return CallbackResult.Empty;
                 }
+
+                Operation latestOperation = payment.Operations.LastOrDefault();
+                if (latestOperation == null)
+                {
+                    return CallbackResult.BadRequest();
+                }
+
+                if (latestOperation.QuickpayStatusCode == QuickpayStatusCodeApproved || latestOperation.AcquirerStatusCode == "000")
+                {
+                    PaymentStatus? currentPaymentStatus = context.Order?.TransactionInfo?.PaymentStatus;
+                    PaymentStatus newPaymentStatus = GetPaymentStatus(latestOperation);
+
+                    Logger.Debug($"ProcessCallbackAsync - current payment status: {currentPaymentStatus}, new payment status: {newPaymentStatus}, operations: {System.Text.Json.JsonSerializer.Serialize(payment.Operations)}.");
+                    if (newPaymentStatus == PaymentStatus.Authorized && currentPaymentStatus != PaymentStatus.Initialized)
+                    {
+                        return CallbackResult.Empty;
+                    }
+
+                    if (newPaymentStatus == PaymentStatus.Captured && currentPaymentStatus != PaymentStatus.Authorized)
+                    {
+                        return CallbackResult.BadRequest();
+                    }
+
+                    int totalAmount = latestOperation.Amount;
+                    return new CallbackResult
+                    {
+                        TransactionInfo = new TransactionInfo
+                        {
+                            AmountAuthorized = AmountFromMinorUnits(totalAmount),
+                            TransactionId = GetTransactionId(payment),
+                            PaymentStatus = newPaymentStatus,
+                        },
+                    };
+                }
+
+                Logger.Warn($"Quickpay [{context.Order.OrderNumber}] - Payment not approved. Quickpay status code: {latestOperation.QuickpayStatusCode} ({latestOperation.QuickpayStatusMessage}). Acquirer status code: {latestOperation.AcquirerStatusCode} ({latestOperation.AcquirerStatusMessage}).");
+                return CallbackResult.Empty;
             }
             catch (Exception ex)
             {
                 Logger.Error(ex, "Quickpay - ProcessCallback");
+                return CallbackResult.BadRequest();
             }
-
-            return CallbackResult.Empty;
         }
 
-        private bool VerifyOrder(OrderReadOnly order, QuickpayPayment payment)
+        private static bool VerifyOrder(OrderReadOnly order, QuickpayPayment payment)
         {
-            if (payment.Variables.Count > 0 && 
+            if (payment.Variables.Count > 0 &&
                 payment.Variables.TryGetValue("orderReference", out string orderReference))
             {
                 if (order.GenerateOrderReference() == orderReference)
@@ -432,7 +442,8 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             var json = await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var checkSum = request.Headers.GetValues("Quickpay-Checksum-Sha256").FirstOrDefault();
 
-            if (string.IsNullOrEmpty(checkSum)) return false;
+            if (string.IsNullOrEmpty(checkSum))
+                return false;
 
             var calculatedChecksum = Checksum(json, privateAccountKey);
 
