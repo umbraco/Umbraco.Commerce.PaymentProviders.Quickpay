@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models
 {
@@ -20,7 +20,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models
         /// Amount
         /// </summary>
         [JsonPropertyName("amount")]
-        public int Amount { get; set; }
+        public int? Amount { get; set; }
 
         /// <summary>
         /// If the operation is pending
