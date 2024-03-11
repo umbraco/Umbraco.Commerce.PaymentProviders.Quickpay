@@ -98,12 +98,12 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                             else if (orderNumberTemplate.EndsWith("{0}"))
                             {
                                 // Trim prefix
-                                reference = reference.Substring(prefix.Length - 1);
+                                reference = reference.Substring(prefix.Length);
                             }
                             else if (orderNumberTemplate.Contains("{0}"))
                             {
                                 // Trim prefix & suffix
-                                reference = reference.Substring(prefix.Length - 1, reference.Length - suffix.Length);
+                                reference = reference.Substring(prefix.Length, reference.Length - prefix.Length - suffix.Length);
                             }
                         }
                     }

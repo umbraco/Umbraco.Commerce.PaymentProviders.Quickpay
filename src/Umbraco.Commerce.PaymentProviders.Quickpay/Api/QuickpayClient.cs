@@ -98,6 +98,10 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
             {
                 throw;
             }
+            catch (Exception ex)
+            {
+                throw;
+            }
 
             return result;
         }
