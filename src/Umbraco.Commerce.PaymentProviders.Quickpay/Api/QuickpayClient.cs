@@ -1,9 +1,8 @@
-using Flurl.Http;
-using Flurl.Http.Newtonsoft;
-using Newtonsoft.Json;
 using System;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Flurl.Http;
 using Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models;
 
 namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
@@ -78,16 +77,15 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
 
             try
             {
-                var req = new FlurlRequest(_config.BaseUrl + url)
+                FlurlRequest req = new FlurlRequest(_config.BaseUrl + url)
                         .WithSettings(x =>
                         {
-                            var jsonSettings = new JsonSerializerSettings
+                            var jsonSettings = new System.Text.Json.JsonSerializerOptions
                             {
-                                NullValueHandling = NullValueHandling.Ignore,
-                                DefaultValueHandling = DefaultValueHandling.Include,
-                                MissingMemberHandling = MissingMemberHandling.Ignore
+                                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                                UnmappedMemberHandling = JsonUnmappedMemberHandling.Skip,
                             };
-                            x.JsonSerializer = new NewtonsoftJsonSerializer(jsonSettings);
+                            x.JsonSerializer = new CustomFlurlJsonSerializer(jsonSettings);
                         })
                         .WithHeader("Accept-Version", "v10")
                         .WithHeader("Authorization", _config.Authorization);

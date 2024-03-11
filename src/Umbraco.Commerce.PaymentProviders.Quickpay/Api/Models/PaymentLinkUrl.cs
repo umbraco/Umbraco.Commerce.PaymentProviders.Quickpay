@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models
 {
@@ -7,7 +7,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models
         /// <summary>
         /// Url to payment window for this payment link
         /// </summary>
-        [JsonProperty("url")]
+        [JsonPropertyName("url")]
         public string Url { get; set; }
     }
 }

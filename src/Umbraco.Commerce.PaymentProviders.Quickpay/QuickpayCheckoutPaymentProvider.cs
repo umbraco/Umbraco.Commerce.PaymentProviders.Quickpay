@@ -5,9 +5,9 @@ using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 using Umbraco.Commerce.Common.Logging;
 using Umbraco.Commerce.Core.Api;
 using Umbraco.Commerce.Core.Models;
@@ -217,7 +217,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                         return CallbackResult.BadRequest();
                     }
 
-                    int totalAmount = latestOperation.Amount;
+                    int totalAmount = latestOperation.Amount ?? 0;
                     return new CallbackResult
                     {
                         TransactionInfo = new TransactionInfo
@@ -432,7 +432,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                     var json = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
 
                     // Deserialize json body text 
-                    return JsonConvert.DeserializeObject<QuickpayPayment>(json);
+                    return JsonSerializer.Deserialize<QuickpayPayment>(json);
                 }
             }
         }
