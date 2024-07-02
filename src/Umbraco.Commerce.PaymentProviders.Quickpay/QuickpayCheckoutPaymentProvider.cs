@@ -18,7 +18,7 @@ using Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models;
 
 namespace Umbraco.Commerce.PaymentProviders.Quickpay
 {
-    [PaymentProvider("quickpay-v10-checkout", "Quickpay V10", "Quickpay V10 payment provider for one time payments")]
+    [PaymentProvider("quickpay-v10-checkout")]
     public class QuickpayCheckoutPaymentProvider : QuickpayPaymentProviderBase<QuickpayCheckoutPaymentProvider, QuickpayCheckoutSettings>
     {
         private const string QuickpayStatusCodeApproved = "20000";

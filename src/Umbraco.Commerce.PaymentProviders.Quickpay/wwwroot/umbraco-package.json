@@ -1,0 +1,17 @@
+{
+    "name": "Umbraco Commerce Quickpay Payment Provider",
+    "$schema": "../umbraco-package-schema.json",
+    "extensions": [
+        {
+            "type": "localization",
+            "alias": "UmbracoCommerce.PaymentProviders.Quickpay.Localization.En_US",
+            "weight": -100,
+            "name": "English (US)",
+            "meta": {
+                "culture": "en-us"
+            },
+            "js": "/App_Plugins/UmbracoCommerceQuickpayPaymentProvider/lang/en-us.js"
+        }
+    ],
+    "version": ""
+}
