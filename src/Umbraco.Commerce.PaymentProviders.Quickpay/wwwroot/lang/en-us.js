@@ -1,5 +1,5 @@
 export default {
-    paymentProviders: {
+    ucPaymentProviders: {
         'quickpayV10CheckoutLabel': 'Quickpay V10',
         'quickpayV10CheckoutDescription': 'Quickpay V10 payment provider for one time payments',
         'quickpayV10CheckoutSettingsContinueUrlLabel': 'Continue URL',
