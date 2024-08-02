@@ -480,3 +480,4 @@ $RECYCLE.BIN/
 ## Umbraco Commerce specific
 ##
 /src/Umbraco.Commerce.PaymentProviders.Quickpay/packages.lock.json
+tests/Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests/packages.lock.json
