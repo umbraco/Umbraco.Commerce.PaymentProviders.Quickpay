@@ -4,13 +4,13 @@
     "extensions": [
         {
             "type": "localization",
-            "alias": "UmbracoCommerce.PaymentProviders.Quickpay.Localization.En_US",
+            "alias": "UmbracoCommerce.PaymentProviders.Quickpay.Localization.En",
             "weight": -100,
-            "name": "English (US)",
+            "name": "English",
             "meta": {
-                "culture": "en-us"
+                "culture": "en"
             },
-            "js": "/App_Plugins/UmbracoCommerceQuickpayPaymentProvider/lang/en-us.js"
+            "js": "/App_Plugins/UmbracoCommerceQuickpayPaymentProvider/lang/en.js"
         }
     ],
     "version": ""

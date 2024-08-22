@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Umbraco.Commerce.PaymentPro
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests", "tests\Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests\Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests.csproj", "{0CB214F8-4DCE-470B-8DC9-E4AA6E312835}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{145F843B-6BD6-4DF0-8A58-428C8F7B4F0C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,5 +29,8 @@ Global
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CC19E744-032F-49E5-9BF2-ECE8540834AA}
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{0CB214F8-4DCE-470B-8DC9-E4AA6E312835} = {145F843B-6BD6-4DF0-8A58-428C8F7B4F0C}
 	EndGlobalSection
 EndGlobal
