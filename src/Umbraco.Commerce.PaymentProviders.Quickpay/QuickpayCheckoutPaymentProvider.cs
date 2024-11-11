@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Umbraco.Commerce.Common.Logging;
 using Umbraco.Commerce.Core.Api;
 using Umbraco.Commerce.Core.Models;
@@ -43,7 +44,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
         public override async Task<PaymentFormResult> GenerateFormAsync(PaymentProviderContext<QuickpayCheckoutSettings> ctx, CancellationToken cancellationToken = default)
         {
-            var currency = Context.Services.CurrencyService.GetCurrency(ctx.Order.CurrencyId);
+            var currency = await Context.Services.CurrencyService.GetCurrencyAsync(ctx.Order.CurrencyId);
             var currencyCode = currency.Code.ToUpperInvariant();
 
             // Ensure currency has valid ISO 4217 code
@@ -82,7 +83,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                     // Quickpay has a limit of order id between 4-20 characters.
                     if (reference.Length > 20)
                     {
-                        var store = Context.Services.StoreService.GetStore(ctx.Order.StoreId);
+                        var store = await Context.Services.StoreService.GetStoreAsync(ctx.Order.StoreId);
                         var orderNumberTemplate = store.OrderNumberTemplate;
 
                         // If the order number template is not equals Vendr generated order number, we need to decide whether to trim prefix, suffix or both.
@@ -179,14 +180,15 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             try
             {
                 ArgumentNullException.ThrowIfNull(context);
-                if (!await ValidateChecksumAsync(context.Request, context.Settings.PrivateKey, cancellationToken).ConfigureAwait(false))
+
+                if (!await ValidateChecksumAsync(context.HttpContext.Request, context.Settings.PrivateKey, cancellationToken).ConfigureAwait(false))
                 {
                     Logger.Warn($"Quickpay [{context.Order.OrderNumber}] - Checksum validation failed");
                     return CallbackResult.BadRequest();
                 }
 
                 QuickpayPayment payment = await ParseCallbackAsync(
-                        context.Request,
+                        context.HttpContext.Request,
                         cancellationToken).ConfigureAwait(false);
 
                 if (!VerifyOrder(context.Order, payment))
@@ -416,31 +418,32 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             return ApiResult.Empty;
         }
 
-        public async Task<QuickpayPayment> ParseCallbackAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
+        private async Task<QuickpayPayment> ParseCallbackAsync(HttpRequest request, CancellationToken cancellationToken = default)
         {
-            using (var stream = await request.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+            if (request.Body.CanSeek)
             {
-                if (stream.CanSeek)
-                {
-                    stream.Seek(0, SeekOrigin.Begin);
-                }
-
-                // Get quickpay callback body text - See parameters: https://learn.quickpay.net/tech-talk/api/callback/
-
-                using (var reader = new StreamReader(stream))
-                {
-                    var json = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-
-                    // Deserialize json body text 
-                    return JsonSerializer.Deserialize<QuickpayPayment>(json);
-                }
+                request.Body.Seek(0, SeekOrigin.Begin);
             }
+
+            // Get quickpay callback body text - See parameters: https://learn.quickpay.net/tech-talk/api/callback/
+
+            using var reader = new StreamReader(request.Body);
+            var json = await reader.ReadToEndAsync(cancellationToken);
+
+            // Deserialize json body text
+            return JsonSerializer.Deserialize<QuickpayPayment>(json);
         }
 
-        private async Task<bool> ValidateChecksumAsync(HttpRequestMessage request, string privateAccountKey, CancellationToken cancellationToken = default)
+        private async Task<bool> ValidateChecksumAsync(HttpRequest request, string privateAccountKey, CancellationToken cancellationToken = default)
         {
-            var json = await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            var checkSum = request.Headers.GetValues("Quickpay-Checksum-Sha256").FirstOrDefault();
+            if (request.Body.CanSeek)
+            {
+                request.Body.Seek(0, SeekOrigin.Begin);
+            }
+
+            using var reader = new StreamReader(request.Body);
+            var json = await reader.ReadToEndAsync(cancellationToken);
+            var checkSum = request.Headers["Quickpay-Checksum-Sha256"].FirstOrDefault();
 
             if (string.IsNullOrEmpty(checkSum))
                 return false;
