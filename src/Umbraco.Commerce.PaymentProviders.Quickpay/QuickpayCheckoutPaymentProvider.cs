@@ -127,7 +127,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                             Currency = currencyCode,
                             Variables = metaData
                         },
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken);
 
                     quickPayPaymentId = GetTransactionId(payment);
 
@@ -144,7 +144,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                         Framed = ctx.Settings.Framed
 
                     },
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken);
 
                     paymentFormLink = paymentLink.Url;
 
@@ -181,15 +181,21 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             {
                 ArgumentNullException.ThrowIfNull(context);
 
-                if (!await ValidateChecksumAsync(context.HttpContext.Request, context.Settings.PrivateKey, cancellationToken).ConfigureAwait(false))
+                var webhookBody = await GetJsonBodyAsync(context.HttpContext.Request, cancellationToken);
+
+                if (!await ValidateChecksumAsync(
+                    context.HttpContext.Request.Headers["Quickpay-Checksum-Sha256"],
+                    webhookBody,
+                    context.Settings.PrivateKey,
+                    cancellationToken))
                 {
                     Logger.Warn($"Quickpay [{context.Order.OrderNumber}] - Checksum validation failed");
                     return CallbackResult.BadRequest();
                 }
 
                 QuickpayPayment payment = await ParseCallbackAsync(
-                        context.HttpContext.Request,
-                        cancellationToken).ConfigureAwait(false);
+                    webhookBody,
+                    cancellationToken);
 
                 if (!VerifyOrder(context.Order, payment))
                 {
@@ -273,7 +279,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                 var clientConfig = GetQuickpayClientConfig(ctx.Settings);
                 var client = new QuickpayClient(clientConfig);
 
-                var payment = await client.GetPaymentAsync(id, cancellationToken).ConfigureAwait(false);
+                var payment = await client.GetPaymentAsync(id, cancellationToken);
 
                 Operation lastCompletedOperation = payment.Operations.LastOrDefault(o => !o.Pending && o.QuickpayStatusCode == "20000");
 
@@ -310,7 +316,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                 var clientConfig = GetQuickpayClientConfig(ctx.Settings);
                 var client = new QuickpayClient(clientConfig);
 
-                var payment = await client.CancelPaymentAsync(id, cancellationToken).ConfigureAwait(false);
+                var payment = await client.CancelPaymentAsync(id, cancellationToken);
 
                 Operation lastCompletedOperation = payment.Operations.LastOrDefault(o => !o.Pending && o.QuickpayStatusCode == "20000");
 
@@ -351,7 +357,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                 {
                     amount = AmountToMinorUnits(ctx.Order.TransactionInfo.AmountAuthorized.Value)
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
                 Operation lastCompletedOperation = payment.Operations.LastOrDefault(o => !o.Pending && o.QuickpayStatusCode == "20000");
 
@@ -392,7 +398,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                 {
                     amount = AmountToMinorUnits(ctx.Order.TransactionInfo.AmountAuthorized.Value)
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
                 Operation lastCompletedOperation = payment.Operations.LastOrDefault(o => !o.Pending && o.QuickpayStatusCode == "20000");
 
@@ -418,39 +424,28 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             return ApiResult.Empty;
         }
 
-        private async Task<QuickpayPayment> ParseCallbackAsync(HttpRequest request, CancellationToken cancellationToken = default)
+        private async Task<string> GetJsonBodyAsync(HttpRequest request, CancellationToken cancellationToken = default)
         {
             if (request.Body.CanSeek)
             {
                 request.Body.Seek(0, SeekOrigin.Begin);
             }
 
-            // Get quickpay callback body text - See parameters: https://learn.quickpay.net/tech-talk/api/callback/
-
             using var reader = new StreamReader(request.Body);
-            var json = await reader.ReadToEndAsync(cancellationToken);
-
-            // Deserialize json body text
-            return JsonSerializer.Deserialize<QuickpayPayment>(json);
+            return await reader.ReadToEndAsync(cancellationToken);
         }
 
-        private async Task<bool> ValidateChecksumAsync(HttpRequest request, string privateAccountKey, CancellationToken cancellationToken = default)
+        private Task<QuickpayPayment> ParseCallbackAsync(string webhookBody, CancellationToken cancellationToken = default)
+            => Task.FromResult(JsonSerializer.Deserialize<QuickpayPayment>(webhookBody));
+
+        private async Task<bool> ValidateChecksumAsync(string checksum, string webhookBody, string privateAccountKey, CancellationToken cancellationToken = default)
         {
-            if (request.Body.CanSeek)
-            {
-                request.Body.Seek(0, SeekOrigin.Begin);
-            }
-
-            using var reader = new StreamReader(request.Body);
-            var json = await reader.ReadToEndAsync(cancellationToken);
-            var checkSum = request.Headers["Quickpay-Checksum-Sha256"].FirstOrDefault();
-
-            if (string.IsNullOrEmpty(checkSum))
+            if (string.IsNullOrEmpty(checksum))
                 return false;
 
-            var calculatedChecksum = Checksum(json, privateAccountKey);
+            var calculatedChecksum = Checksum(webhookBody, privateAccountKey);
 
-            return checkSum.Equals(calculatedChecksum);
+            return checksum.Equals(calculatedChecksum);
         }
 
         private string Checksum(string content, string privateKey)
