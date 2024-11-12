@@ -37,9 +37,9 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
         public override IEnumerable<TransactionMetaDataDefinition> TransactionMetaDataDefinitions => new[]
         {
-            new TransactionMetaDataDefinition("quickPayOrderId", "Quickpay Order ID"),
-            new TransactionMetaDataDefinition("quickPayPaymentId", "Quickpay Payment ID"),
-            new TransactionMetaDataDefinition("quickPayPaymentHash", "Quickpay Payment Hash")
+            new TransactionMetaDataDefinition("quickpayOrderId", "Quickpay Order ID"),
+            new TransactionMetaDataDefinition("quickpayPaymentId", "Quickpay Payment ID"),
+            new TransactionMetaDataDefinition("quickpayPaymentHash", "Quickpay Payment Hash")
         };
 
         public override async Task<PaymentFormResult> GenerateFormAsync(PaymentProviderContext<QuickpayCheckoutSettings> ctx, CancellationToken cancellationToken = default)
@@ -64,12 +64,12 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             // Parse language - default language is English.
             Enum.TryParse(ctx.Settings.Lang, true, out QuickpayLang lang);
 
-            var quickPayOrderId = ctx.Order.Properties["quickPayOrderId"]?.Value;
-            var quickPayPaymentId = ctx.Order.Properties["quickPayPaymentId"]?.Value;
-            var quickPayPaymentHash = ctx.Order.Properties["quickPayPaymentHash"]?.Value ?? string.Empty;
-            var quickPayPaymentLinkHash = ctx.Order.Properties["quickPayPaymentLinkHash"]?.Value ?? string.Empty;
+            var quickpayOrderId = ctx.Order.Properties["quickpayOrderId"]?.Value;
+            var quickpayPaymentId = ctx.Order.Properties["quickpayPaymentId"]?.Value;
+            var quickpayPaymentHash = ctx.Order.Properties["quickpayPaymentHash"]?.Value ?? string.Empty;
+            var quickpayPaymentLinkHash = ctx.Order.Properties["quickpayPaymentLinkHash"]?.Value ?? string.Empty;
 
-            if (quickPayPaymentHash != GetPaymentHash(quickPayPaymentId, ctx.Order.OrderNumber, currencyCode, orderAmount))
+            if (quickpayPaymentHash != GetPaymentHash(quickpayPaymentId, ctx.Order.OrderNumber, currencyCode, orderAmount))
             {
                 try
                 {
@@ -118,18 +118,18 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                         { "orderNumber", ctx.Order.OrderNumber }
                     };
 
-                    quickPayOrderId = reference;
+                    quickpayOrderId = reference;
 
                     var payment = await client.CreatePaymentAsync(
                         new QuickpayPaymentRequest
                         {
-                            OrderId = quickPayOrderId,
+                            OrderId = quickpayOrderId,
                             Currency = currencyCode,
                             Variables = metaData
                         },
                         cancellationToken);
 
-                    quickPayPaymentId = GetTransactionId(payment);
+                    quickpayPaymentId = GetTransactionId(payment);
 
                     var paymentLink = await client.CreatePaymentLinkAsync(payment.Id.ToString(), new QuickpayPaymentLinkRequest
                     {
@@ -148,8 +148,8 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
                     paymentFormLink = paymentLink.Url;
 
-                    quickPayPaymentHash = GetPaymentHash(payment.Id.ToString(), ctx.Order.OrderNumber, currencyCode, orderAmount);
-                    quickPayPaymentLinkHash = Base64Encode(paymentFormLink);
+                    quickpayPaymentHash = GetPaymentHash(payment.Id.ToString(), ctx.Order.OrderNumber, currencyCode, orderAmount);
+                    quickpayPaymentLinkHash = Base64Encode(paymentFormLink);
                 }
                 catch (Exception ex)
                 {
@@ -159,17 +159,17 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             else
             {
                 // Get payment link from order properties.
-                paymentFormLink = Base64Decode(quickPayPaymentLinkHash);
+                paymentFormLink = Base64Decode(quickpayPaymentLinkHash);
             }
 
             return new PaymentFormResult()
             {
                 MetaData = new Dictionary<string, string>
                 {
-                    { "quickPayOrderId", quickPayOrderId },
-                    { "quickPayPaymentId", quickPayPaymentId },
-                    { "quickPayPaymentHash", quickPayPaymentHash },
-                    { "quickPayPaymentLinkHash", quickPayPaymentLinkHash }
+                    { "quickpayOrderId", quickpayOrderId },
+                    { "quickpayPaymentId", quickpayPaymentId },
+                    { "quickpayPaymentHash", quickpayPaymentHash },
+                    { "quickpayPaymentLinkHash", quickpayPaymentLinkHash }
                 },
                 Form = new PaymentForm(paymentFormLink, PaymentFormMethod.Get)
             };
@@ -259,7 +259,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             }
             else
             {
-                if (order.Properties["quickPayOrderId"]?.Value == payment.OrderId)
+                if (order.Properties["quickpayOrderId"]?.Value == payment.OrderId)
                 {
                     return true;
                 }
