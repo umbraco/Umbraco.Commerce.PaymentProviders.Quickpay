@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Umbraco.Commerce.Common.Logging;
 using Umbraco.Commerce.Core.Api;
 using Umbraco.Commerce.Core.Models;
@@ -36,14 +37,14 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
         public override IEnumerable<TransactionMetaDataDefinition> TransactionMetaDataDefinitions => new[]
         {
-            new TransactionMetaDataDefinition("quickPayOrderId", "Quickpay Order ID"),
-            new TransactionMetaDataDefinition("quickPayPaymentId", "Quickpay Payment ID"),
-            new TransactionMetaDataDefinition("quickPayPaymentHash", "Quickpay Payment Hash")
+            new TransactionMetaDataDefinition("quickpayOrderId", "Quickpay Order ID"),
+            new TransactionMetaDataDefinition("quickpayPaymentId", "Quickpay Payment ID"),
+            new TransactionMetaDataDefinition("quickpayPaymentHash", "Quickpay Payment Hash")
         };
 
         public override async Task<PaymentFormResult> GenerateFormAsync(PaymentProviderContext<QuickpayCheckoutSettings> ctx, CancellationToken cancellationToken = default)
         {
-            var currency = Context.Services.CurrencyService.GetCurrency(ctx.Order.CurrencyId);
+            var currency = await Context.Services.CurrencyService.GetCurrencyAsync(ctx.Order.CurrencyId);
             var currencyCode = currency.Code.ToUpperInvariant();
 
             // Ensure currency has valid ISO 4217 code
@@ -63,12 +64,12 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             // Parse language - default language is English.
             Enum.TryParse(ctx.Settings.Lang, true, out QuickpayLang lang);
 
-            var quickPayOrderId = ctx.Order.Properties["quickPayOrderId"]?.Value;
-            var quickPayPaymentId = ctx.Order.Properties["quickPayPaymentId"]?.Value;
-            var quickPayPaymentHash = ctx.Order.Properties["quickPayPaymentHash"]?.Value ?? string.Empty;
-            var quickPayPaymentLinkHash = ctx.Order.Properties["quickPayPaymentLinkHash"]?.Value ?? string.Empty;
+            var quickpayOrderId = ctx.Order.Properties["quickpayOrderId"]?.Value;
+            var quickpayPaymentId = ctx.Order.Properties["quickpayPaymentId"]?.Value;
+            var quickpayPaymentHash = ctx.Order.Properties["quickpayPaymentHash"]?.Value ?? string.Empty;
+            var quickpayPaymentLinkHash = ctx.Order.Properties["quickpayPaymentLinkHash"]?.Value ?? string.Empty;
 
-            if (quickPayPaymentHash != GetPaymentHash(quickPayPaymentId, ctx.Order.OrderNumber, currencyCode, orderAmount))
+            if (quickpayPaymentHash != GetPaymentHash(quickpayPaymentId, ctx.Order.OrderNumber, currencyCode, orderAmount))
             {
                 try
                 {
@@ -82,7 +83,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                     // Quickpay has a limit of order id between 4-20 characters.
                     if (reference.Length > 20)
                     {
-                        var store = Context.Services.StoreService.GetStore(ctx.Order.StoreId);
+                        var store = await Context.Services.StoreService.GetStoreAsync(ctx.Order.StoreId);
                         var orderNumberTemplate = store.OrderNumberTemplate;
 
                         // If the order number template is not equals Vendr generated order number, we need to decide whether to trim prefix, suffix or both.
@@ -117,18 +118,18 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                         { "orderNumber", ctx.Order.OrderNumber }
                     };
 
-                    quickPayOrderId = reference;
+                    quickpayOrderId = reference;
 
                     var payment = await client.CreatePaymentAsync(
                         new QuickpayPaymentRequest
                         {
-                            OrderId = quickPayOrderId,
+                            OrderId = quickpayOrderId,
                             Currency = currencyCode,
                             Variables = metaData
                         },
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken);
 
-                    quickPayPaymentId = GetTransactionId(payment);
+                    quickpayPaymentId = GetTransactionId(payment);
 
                     var paymentLink = await client.CreatePaymentLinkAsync(payment.Id.ToString(), new QuickpayPaymentLinkRequest
                     {
@@ -143,12 +144,12 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                         Framed = ctx.Settings.Framed
 
                     },
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken);
 
                     paymentFormLink = paymentLink.Url;
 
-                    quickPayPaymentHash = GetPaymentHash(payment.Id.ToString(), ctx.Order.OrderNumber, currencyCode, orderAmount);
-                    quickPayPaymentLinkHash = Base64Encode(paymentFormLink);
+                    quickpayPaymentHash = GetPaymentHash(payment.Id.ToString(), ctx.Order.OrderNumber, currencyCode, orderAmount);
+                    quickpayPaymentLinkHash = Base64Encode(paymentFormLink);
                 }
                 catch (Exception ex)
                 {
@@ -158,17 +159,17 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             else
             {
                 // Get payment link from order properties.
-                paymentFormLink = Base64Decode(quickPayPaymentLinkHash);
+                paymentFormLink = Base64Decode(quickpayPaymentLinkHash);
             }
 
             return new PaymentFormResult()
             {
                 MetaData = new Dictionary<string, string>
                 {
-                    { "quickPayOrderId", quickPayOrderId },
-                    { "quickPayPaymentId", quickPayPaymentId },
-                    { "quickPayPaymentHash", quickPayPaymentHash },
-                    { "quickPayPaymentLinkHash", quickPayPaymentLinkHash }
+                    { "quickpayOrderId", quickpayOrderId },
+                    { "quickpayPaymentId", quickpayPaymentId },
+                    { "quickpayPaymentHash", quickpayPaymentHash },
+                    { "quickpayPaymentLinkHash", quickpayPaymentLinkHash }
                 },
                 Form = new PaymentForm(paymentFormLink, PaymentFormMethod.Get)
             };
@@ -179,15 +180,22 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             try
             {
                 ArgumentNullException.ThrowIfNull(context);
-                if (!await ValidateChecksumAsync(context.Request, context.Settings.PrivateKey, cancellationToken).ConfigureAwait(false))
+
+                var webhookBody = await GetJsonBodyAsync(context.HttpContext.Request, cancellationToken);
+
+                if (!await ValidateChecksumAsync(
+                    context.HttpContext.Request.Headers["Quickpay-Checksum-Sha256"],
+                    webhookBody,
+                    context.Settings.PrivateKey,
+                    cancellationToken))
                 {
                     Logger.Warn($"Quickpay [{context.Order.OrderNumber}] - Checksum validation failed");
                     return CallbackResult.BadRequest();
                 }
 
                 QuickpayPayment payment = await ParseCallbackAsync(
-                        context.Request,
-                        cancellationToken).ConfigureAwait(false);
+                    webhookBody,
+                    cancellationToken);
 
                 if (!VerifyOrder(context.Order, payment))
                 {
@@ -251,7 +259,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             }
             else
             {
-                if (order.Properties["quickPayOrderId"]?.Value == payment.OrderId)
+                if (order.Properties["quickpayOrderId"]?.Value == payment.OrderId)
                 {
                     return true;
                 }
@@ -271,7 +279,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                 var clientConfig = GetQuickpayClientConfig(ctx.Settings);
                 var client = new QuickpayClient(clientConfig);
 
-                var payment = await client.GetPaymentAsync(id, cancellationToken).ConfigureAwait(false);
+                var payment = await client.GetPaymentAsync(id, cancellationToken);
 
                 Operation lastCompletedOperation = payment.Operations.LastOrDefault(o => !o.Pending && o.QuickpayStatusCode == "20000");
 
@@ -308,7 +316,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                 var clientConfig = GetQuickpayClientConfig(ctx.Settings);
                 var client = new QuickpayClient(clientConfig);
 
-                var payment = await client.CancelPaymentAsync(id, cancellationToken).ConfigureAwait(false);
+                var payment = await client.CancelPaymentAsync(id, cancellationToken);
 
                 Operation lastCompletedOperation = payment.Operations.LastOrDefault(o => !o.Pending && o.QuickpayStatusCode == "20000");
 
@@ -349,7 +357,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                 {
                     amount = AmountToMinorUnits(ctx.Order.TransactionInfo.AmountAuthorized.Value)
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
                 Operation lastCompletedOperation = payment.Operations.LastOrDefault(o => !o.Pending && o.QuickpayStatusCode == "20000");
 
@@ -390,7 +398,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                 {
                     amount = AmountToMinorUnits(ctx.Order.TransactionInfo.AmountAuthorized.Value)
                 },
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken);
 
                 Operation lastCompletedOperation = payment.Operations.LastOrDefault(o => !o.Pending && o.QuickpayStatusCode == "20000");
 
@@ -416,38 +424,28 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             return ApiResult.Empty;
         }
 
-        public async Task<QuickpayPayment> ParseCallbackAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
+        private async Task<string> GetJsonBodyAsync(HttpRequest request, CancellationToken cancellationToken = default)
         {
-            using (var stream = await request.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+            if (request.Body.CanSeek)
             {
-                if (stream.CanSeek)
-                {
-                    stream.Seek(0, SeekOrigin.Begin);
-                }
-
-                // Get quickpay callback body text - See parameters: https://learn.quickpay.net/tech-talk/api/callback/
-
-                using (var reader = new StreamReader(stream))
-                {
-                    var json = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-
-                    // Deserialize json body text 
-                    return JsonSerializer.Deserialize<QuickpayPayment>(json);
-                }
+                request.Body.Seek(0, SeekOrigin.Begin);
             }
+
+            using var reader = new StreamReader(request.Body);
+            return await reader.ReadToEndAsync(cancellationToken);
         }
 
-        private async Task<bool> ValidateChecksumAsync(HttpRequestMessage request, string privateAccountKey, CancellationToken cancellationToken = default)
-        {
-            var json = await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            var checkSum = request.Headers.GetValues("Quickpay-Checksum-Sha256").FirstOrDefault();
+        private Task<QuickpayPayment> ParseCallbackAsync(string webhookBody, CancellationToken cancellationToken = default)
+            => Task.FromResult(JsonSerializer.Deserialize<QuickpayPayment>(webhookBody));
 
-            if (string.IsNullOrEmpty(checkSum))
+        private async Task<bool> ValidateChecksumAsync(string checksum, string webhookBody, string privateAccountKey, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrEmpty(checksum))
                 return false;
 
-            var calculatedChecksum = Checksum(json, privateAccountKey);
+            var calculatedChecksum = Checksum(webhookBody, privateAccountKey);
 
-            return checkSum.Equals(calculatedChecksum);
+            return checksum.Equals(calculatedChecksum);
         }
 
         private string Checksum(string content, string privateKey)

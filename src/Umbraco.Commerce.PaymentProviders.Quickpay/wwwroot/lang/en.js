@@ -35,5 +35,9 @@ export default {
 
         'quickpayV10CheckoutSettingsFramedLabel': 'Framed',
         'quickpayV10CheckoutSettingsFramedDescription': 'Flag indicating whether to allow opening payment page in iframe',
+
+        'quickpayV10CheckoutMetaDataQuickpayOrderIdLabel': 'Order ID',
+        'quickpayV10CheckoutMetaDataQuickpayPaymentIdLabel': 'Payment ID',
+        'quickpayV10CheckoutMetaDataQuickpayPaymentHashLabel': 'Payment Hash',
     },
 };
