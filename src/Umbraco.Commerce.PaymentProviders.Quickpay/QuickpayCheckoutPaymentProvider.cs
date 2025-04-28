@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -31,16 +30,17 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
         public override bool CanCancelPayments => true;
         public override bool CanCapturePayments => true;
         public override bool CanRefundPayments => true;
+        public override bool CanPartiallyRefundPayments => true;
         public override bool CanFetchPaymentStatus => true;
 
         public override bool FinalizeAtContinueUrl => false;
 
-        public override IEnumerable<TransactionMetaDataDefinition> TransactionMetaDataDefinitions => new[]
-        {
-            new TransactionMetaDataDefinition("quickpayOrderId", "Quickpay Order ID"),
-            new TransactionMetaDataDefinition("quickpayPaymentId", "Quickpay Payment ID"),
-            new TransactionMetaDataDefinition("quickpayPaymentHash", "Quickpay Payment Hash")
-        };
+        public override IEnumerable<TransactionMetaDataDefinition> TransactionMetaDataDefinitions =>
+        [
+            new TransactionMetaDataDefinition("quickpayOrderId"),
+            new TransactionMetaDataDefinition("quickpayPaymentId"),
+            new TransactionMetaDataDefinition("quickpayPaymentHash")
+        ];
 
         public override async Task<PaymentFormResult> GenerateFormAsync(PaymentProviderContext<QuickpayCheckoutSettings> ctx, CancellationToken cancellationToken = default)
         {
@@ -383,35 +383,55 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             return ApiResult.Empty;
         }
 
-        public override async Task<ApiResult> RefundPaymentAsync(PaymentProviderContext<QuickpayCheckoutSettings> ctx, CancellationToken cancellationToken = default)
+        [Obsolete("Will be removed in v17. Use the overload that takes an order refund request instead.")]
+        public override async Task<ApiResult?> RefundPaymentAsync(PaymentProviderContext<QuickpayCheckoutSettings> context, CancellationToken cancellationToken = default)
         {
-            // POST: /payments/{id}/refund
+            ArgumentNullException.ThrowIfNull(context);
 
-            try
-            {
-                var id = ctx.Order.TransactionInfo.TransactionId;
-
-                var clientConfig = GetQuickpayClientConfig(ctx.Settings);
-                var client = new QuickpayClient(clientConfig);
-
-                var payment = await client.RefundPaymentAsync(id, new
+            StoreReadOnly store = await Context.Services.StoreService.GetStoreAsync(context.Order.StoreId);
+            Amount refundAmount = store.CanRefundTransactionFee ? context.Order.TransactionInfo.AmountAuthorized + context.Order.TransactionInfo.TransactionFee : context.Order.TransactionInfo.AmountAuthorized;
+            return await this.RefundPaymentAsync(
+                context,
+                new PaymentProviderOrderRefundRequest
                 {
-                    amount = AmountToMinorUnits(ctx.Order.TransactionInfo.AmountAuthorized.Value)
+                    RefundAmount = refundAmount,
+                    Orderlines = context.Order.OrderLines.Select(x => new PaymentProviderOrderlineRefundRequest
+                    {
+                        OrderLineId = x.Id,
+                        Quantity = x.Quantity,
+                    }),
                 },
                 cancellationToken);
+        }
 
-                Operation lastCompletedOperation = payment.Operations.LastOrDefault(o => !o.Pending && o.QuickpayStatusCode == "20000");
+        public override async Task<ApiResult?> RefundPaymentAsync(PaymentProviderContext<QuickpayCheckoutSettings> context, PaymentProviderOrderRefundRequest refundRequest, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+            ArgumentNullException.ThrowIfNull(refundRequest);
+            try
+            {
+                string id = context.Order.TransactionInfo.TransactionId;
+
+                QuickpayClientConfig clientConfig = GetQuickpayClientConfig(context.Settings);
+                QuickpayClient client = new(clientConfig);
+
+                QuickpayPayment payment = await client.RefundPaymentAsync(
+                    id,
+                    new { amount = AmountToMinorUnits(refundRequest.RefundAmount) },
+                    cancellationToken);
+
+                Operation? lastCompletedOperation = payment.Operations.LastOrDefault(o => !o.Pending && o.QuickpayStatusCode == "20000");
 
                 if (lastCompletedOperation != null)
                 {
-                    var paymentStatus = GetPaymentStatus(lastCompletedOperation);
+                    PaymentStatus paymentStatus = GetPaymentStatus(lastCompletedOperation);
 
                     return new ApiResult()
                     {
                         TransactionInfo = new TransactionInfoUpdate()
                         {
                             TransactionId = GetTransactionId(payment),
-                            PaymentStatus = paymentStatus
+                            PaymentStatus = paymentStatus,
                         }
                     };
                 }
