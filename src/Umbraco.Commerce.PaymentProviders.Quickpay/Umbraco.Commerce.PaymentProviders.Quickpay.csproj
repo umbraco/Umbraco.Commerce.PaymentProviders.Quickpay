@@ -1,13 +1,15 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
     <PropertyGroup>
       <Title>Umbraco Commerce Quickpay Payment Provider</Title>
       <Description>Quickpay payment provider for Umbraco Commerce</Description>
+      <StaticWebAssetBasePath>App_Plugins/UmbracoCommerceQuickpayPaymentProvider</StaticWebAssetBasePath>
+      <NoWarn>IDE0290;IDE0058;CA2007;IDE0021;IDE0022;</NoWarn>
+      <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Flurl.Http" />
-      <PackageReference Include="Microsoft.AspNet.WebApi.Client"  />
       <PackageReference Include="Umbraco.Commerce.Core" />
     </ItemGroup>
 

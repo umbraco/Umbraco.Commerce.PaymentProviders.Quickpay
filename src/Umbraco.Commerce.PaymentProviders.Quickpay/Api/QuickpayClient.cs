@@ -1,9 +1,8 @@
-using Flurl.Http;
-using Flurl.Http.Configuration;
-using Newtonsoft.Json;
 using System;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Flurl.Http;
 using Umbraco.Commerce.PaymentProviders.Quickpay.Api.Models;
 
 namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
@@ -21,7 +20,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
         {
             return await RequestAsync("/payments", async (req, ct) => await req
                 .WithHeader("Content-Type", "application/json")
-                .PostJsonAsync(data, ct)
+                .PostJsonAsync(data, cancellationToken: ct)
                 .ReceiveJson<QuickpayPayment>().ConfigureAwait(false),
                 cancellationToken).ConfigureAwait(false);
         }
@@ -30,7 +29,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
         {
             return await RequestAsync($"/payments/{paymentId}/link", async (req, ct) => await req
                 .WithHeader("Content-Type", "application/json")
-                .PutJsonAsync(data, ct)
+                .PutJsonAsync(data, cancellationToken: ct)
                 .ReceiveJson<PaymentLinkUrl>().ConfigureAwait(false),
                 cancellationToken).ConfigureAwait(false);
         }
@@ -38,7 +37,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
         public async Task<QuickpayPayment> GetPaymentAsync(string paymentId, CancellationToken cancellationToken = default)
         {
             return await RequestAsync($"/payments/{paymentId}", async (req, ct) => await req
-                .GetJsonAsync<QuickpayPayment>(ct).ConfigureAwait(false),
+                .GetJsonAsync<QuickpayPayment>(cancellationToken: ct).ConfigureAwait(false),
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -47,7 +46,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
             return await RequestAsync($"/payments/{paymentId}/cancel", async (req, ct) => await req
                 .WithHeader("Content-Type", "application/json")
                 .SetQueryParam("synchronized", string.Empty)
-                .PostJsonAsync(null, ct)
+                .PostJsonAsync(null, cancellationToken: ct)
                 .ReceiveJson<QuickpayPayment>().ConfigureAwait(false),
                 cancellationToken).ConfigureAwait(false);
         }
@@ -57,7 +56,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
             return await RequestAsync($"/payments/{paymentId}/capture", async (req, ct) => await req
                 .WithHeader("Content-Type", "application/json")
                 .SetQueryParam("synchronized", string.Empty)
-                .PostJsonAsync(data, ct)
+                .PostJsonAsync(data, cancellationToken: ct)
                 .ReceiveJson<QuickpayPayment>().ConfigureAwait(false),
                 cancellationToken).ConfigureAwait(false);
         }
@@ -67,7 +66,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
             return await RequestAsync($"/payments/{paymentId}/refund", async (req, ct) => await req
                 .WithHeader("Content-Type", "application/json")
                 .SetQueryParam("synchronized", string.Empty)
-                .PostJsonAsync(data, ct)
+                .PostJsonAsync(data, cancellationToken: ct)
                 .ReceiveJson<QuickpayPayment>().ConfigureAwait(false),
                 cancellationToken).ConfigureAwait(false);
         }
@@ -78,16 +77,15 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
 
             try
             {
-                var req = new FlurlRequest(_config.BaseUrl + url)
-                        .ConfigureRequest(x =>
+                FlurlRequest req = new FlurlRequest(_config.BaseUrl + url)
+                        .WithSettings(x =>
                         {
-                            var jsonSettings = new JsonSerializerSettings
+                            var jsonSettings = new System.Text.Json.JsonSerializerOptions
                             {
-                                NullValueHandling = NullValueHandling.Ignore,
-                                DefaultValueHandling = DefaultValueHandling.Include,
-                                MissingMemberHandling = MissingMemberHandling.Ignore
+                                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                                UnmappedMemberHandling = JsonUnmappedMemberHandling.Skip,
                             };
-                            x.JsonSerializer = new NewtonsoftJsonSerializer(jsonSettings);
+                            x.JsonSerializer = new CustomFlurlJsonSerializer(jsonSettings);
                         })
                         .WithHeader("Accept-Version", "v10")
                         .WithHeader("Authorization", _config.Authorization);
@@ -95,6 +93,10 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.Api
                 result = await func.Invoke(req, cancellationToken).ConfigureAwait(false);
             }
             catch (FlurlHttpException ex)
+            {
+                throw;
+            }
+            catch (Exception ex)
             {
                 throw;
             }
