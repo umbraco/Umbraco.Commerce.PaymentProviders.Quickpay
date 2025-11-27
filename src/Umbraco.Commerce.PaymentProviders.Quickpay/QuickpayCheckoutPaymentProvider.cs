@@ -383,27 +383,6 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             return ApiResult.Empty;
         }
 
-        [Obsolete("Will be removed in v17. Use the overload that takes an order refund request instead.")]
-        public override async Task<ApiResult?> RefundPaymentAsync(PaymentProviderContext<QuickpayCheckoutSettings> context, CancellationToken cancellationToken = default)
-        {
-            ArgumentNullException.ThrowIfNull(context);
-
-            StoreReadOnly store = await Context.Services.StoreService.GetStoreAsync(context.Order.StoreId);
-            Amount refundAmount = store.CanRefundTransactionFee ? context.Order.TransactionInfo.AmountAuthorized + context.Order.TransactionInfo.TransactionFee : context.Order.TransactionInfo.AmountAuthorized;
-            return await this.RefundPaymentAsync(
-                context,
-                new PaymentProviderOrderRefundRequest
-                {
-                    RefundAmount = refundAmount,
-                    Orderlines = context.Order.OrderLines.Select(x => new PaymentProviderOrderlineRefundRequest
-                    {
-                        OrderLineId = x.Id,
-                        Quantity = x.Quantity,
-                    }),
-                },
-                cancellationToken);
-        }
-
         public override async Task<ApiResult?> RefundPaymentAsync(PaymentProviderContext<QuickpayCheckoutSettings> context, PaymentProviderOrderRefundRequest refundRequest, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(context);
