@@ -233,6 +233,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                             AmountAuthorized = AmountFromMinorUnits(totalAmount),
                             TransactionId = GetTransactionId(payment),
                             PaymentStatus = newPaymentStatus,
+                            TransactionFee = AmountFromMinorUnits(payment.Fee ?? 0),
                         },
                     };
                 }
