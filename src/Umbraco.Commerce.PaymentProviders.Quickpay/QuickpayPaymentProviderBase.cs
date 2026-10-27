@@ -61,6 +61,14 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             return PaymentStatus.Initialized;
         }
 
+        protected PaymentStatus GetPaymentStatus(Operation operation, QuickpayPayment payment)
+        {
+            var paymentStatus = GetPaymentStatus(operation);
+            return paymentStatus == PaymentStatus.Refunded && payment.Balance > 0
+                ? PaymentStatus.PartiallyRefunded
+                : paymentStatus;
+        }
+
         protected string GetTransactionId(QuickpayPayment payment)
         {
             return payment?.Id.ToString();
