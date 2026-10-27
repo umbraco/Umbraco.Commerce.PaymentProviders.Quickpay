@@ -212,7 +212,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                 if (latestOperation.QuickpayStatusCode == QuickpayStatusCodeApproved || latestOperation.AcquirerStatusCode == "000")
                 {
                     PaymentStatus? currentPaymentStatus = context.Order?.TransactionInfo?.PaymentStatus;
-                    PaymentStatus newPaymentStatus = GetPaymentStatus(latestOperation);
+                    PaymentStatus newPaymentStatus = GetPaymentStatus(latestOperation, payment);
 
                     Logger.Debug($"ProcessCallbackAsync - current payment status: {currentPaymentStatus}, new payment status: {newPaymentStatus}, operations: {System.Text.Json.JsonSerializer.Serialize(payment.Operations)}.");
                     if (newPaymentStatus == PaymentStatus.Authorized && currentPaymentStatus != PaymentStatus.Initialized)
@@ -286,7 +286,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
                 if (lastCompletedOperation != null)
                 {
-                    var paymentStatus = GetPaymentStatus(lastCompletedOperation);
+                    var paymentStatus = GetPaymentStatus(lastCompletedOperation, payment);
 
                     return new ApiResult()
                     {
@@ -323,7 +323,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
                 if (lastCompletedOperation != null)
                 {
-                    var paymentStatus = GetPaymentStatus(lastCompletedOperation);
+                    var paymentStatus = GetPaymentStatus(lastCompletedOperation, payment);
 
                     return new ApiResult()
                     {
@@ -369,7 +369,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
                 if (lastCompletedOperation != null)
                 {
-                    var paymentStatus = GetPaymentStatus(lastCompletedOperation);
+                    var paymentStatus = GetPaymentStatus(lastCompletedOperation, payment);
 
                     return new ApiResult()
                     {
@@ -409,7 +409,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
                 if (lastCompletedOperation != null)
                 {
-                    PaymentStatus paymentStatus = GetPaymentStatus(lastCompletedOperation);
+                    PaymentStatus paymentStatus = GetPaymentStatus(lastCompletedOperation, payment);
 
                     return new ApiResult()
                     {
