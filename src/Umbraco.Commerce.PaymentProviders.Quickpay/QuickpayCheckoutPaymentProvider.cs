@@ -183,6 +183,12 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
 
                 var webhookBody = await GetJsonBodyAsync(context.HttpContext.Request, cancellationToken);
 
+                if (string.IsNullOrEmpty(context.Settings.PrivateKey))
+                {
+                    Logger.Warn($"Quickpay [{context.Order.OrderNumber}] - Callback refused: no private key is configured on the payment method, so the checksum can't be validated");
+                    return CallbackResult.BadRequest();
+                }
+
                 if (!await ValidateChecksumAsync(
                     context.HttpContext.Request.Headers["Quickpay-Checksum-Sha256"],
                     webhookBody,
@@ -209,7 +215,8 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
                     return CallbackResult.BadRequest();
                 }
 
-                if (latestOperation.QuickpayStatusCode == QuickpayStatusCodeApproved || latestOperation.AcquirerStatusCode == "000")
+                // Only Quickpay's own status decides approval; acquirer codes vary by acquirer.
+                if (latestOperation.QuickpayStatusCode == QuickpayStatusCodeApproved)
                 {
                     PaymentStatus? currentPaymentStatus = context.Order?.TransactionInfo?.PaymentStatus;
                     PaymentStatus newPaymentStatus = GetPaymentStatus(latestOperation, payment);
@@ -260,7 +267,9 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
             }
             else
             {
-                if (order.Properties["quickpayOrderId"]?.Value == payment.OrderId)
+                // Falls back to the Quickpay order ID stored at payment creation, which must be present.
+                string? quickpayOrderId = order.Properties["quickpayOrderId"]?.Value;
+                if (!string.IsNullOrEmpty(quickpayOrderId) && quickpayOrderId == payment.OrderId)
                 {
                     return true;
                 }
@@ -443,33 +452,38 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay
         private Task<QuickpayPayment> ParseCallbackAsync(string webhookBody, CancellationToken cancellationToken = default)
             => Task.FromResult(JsonSerializer.Deserialize<QuickpayPayment>(webhookBody));
 
-        private async Task<bool> ValidateChecksumAsync(string checksum, string webhookBody, string privateAccountKey, CancellationToken cancellationToken = default)
+        private static async Task<bool> ValidateChecksumAsync(string checksum, string webhookBody, string privateAccountKey, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(checksum))
                 return false;
 
-            var calculatedChecksum = Checksum(webhookBody, privateAccountKey);
-
-            return checksum.Equals(calculatedChecksum);
+            return IsValidChecksum(checksum, webhookBody, privateAccountKey);
         }
 
-        private string Checksum(string content, string privateKey)
+        /// <summary>
+        /// Checks the Quickpay-Checksum-Sha256 header: a hex HMAC-SHA256 of the raw body, keyed with
+        /// the account's private key. Compared as bytes, in constant time.
+        /// </summary>
+        private static bool IsValidChecksum(string checksum, string webhookBody, string privateAccountKey)
         {
-            var s = new StringBuilder();
-            var e = Encoding.UTF8;
-            var bytes = e.GetBytes(privateKey);
-
-            using (var hmac = new HMACSHA256(bytes))
+            if (string.IsNullOrEmpty(checksum) || string.IsNullOrEmpty(privateAccountKey) || webhookBody == null)
             {
-                var b = hmac.ComputeHash(e.GetBytes(content));
-
-                foreach (var t in b)
-                {
-                    s.Append(t.ToString("x2"));
-                }
+                return false;
             }
 
-            return s.ToString();
+            byte[] actual;
+            try
+            {
+                actual = Convert.FromHexString(checksum.Trim());
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+
+            byte[] expected = HMACSHA256.HashData(Encoding.UTF8.GetBytes(privateAccountKey), Encoding.UTF8.GetBytes(webhookBody));
+
+            return CryptographicOperations.FixedTimeEquals(expected, actual);
         }
     }
 }
