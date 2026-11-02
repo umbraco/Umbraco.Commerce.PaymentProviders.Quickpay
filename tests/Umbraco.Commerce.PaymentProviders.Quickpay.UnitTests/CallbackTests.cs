@@ -49,7 +49,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests
             string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000" }));
             SetBody(context, json, Sign(json, context.Settings.PrivateKey));
 
-            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context);
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
 
             result.TransactionInfo.Should().NotBeNull();
             result.TransactionInfo!.PaymentStatus.Should().Be(PaymentStatus.Authorized);
@@ -65,9 +65,27 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests
             string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000" }));
             SetBody(context, json, Sign(json, context.Settings.PrivateKey));
 
-            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context);
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
 
             result.TransactionInfo.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task Capture_Callback_On_An_Authorized_Order_Is_Captured()
+        {
+            var context = CreateContext(PaymentStatus.Authorized);
+            string json = JsonSerializer.Serialize(Payment(
+                context,
+                new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000" },
+                new Operation { Type = "capture", Amount = 10000, QuickpayStatusCode = "20000" }));
+            SetBody(context, json, Sign(json, context.Settings.PrivateKey));
+
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
+
+            result.TransactionInfo.Should().NotBeNull();
+            result.TransactionInfo!.PaymentStatus.Should().Be(PaymentStatus.Captured);
+            result.TransactionInfo.AmountAuthorized.Should().Be(100m);
+            result.TransactionInfo.TransactionId.Should().Be("123");
         }
 
         [Fact]
@@ -77,7 +95,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests
             string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "capture", Amount = 10000, QuickpayStatusCode = "20000" }));
             SetBody(context, json, Sign(json, context.Settings.PrivateKey));
 
-            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context);
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
 
             result.TransactionInfo.Should().BeNull();
             result.ActionResult.Should().NotBeNull();
@@ -90,7 +108,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests
             string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000" }));
             SetBody(context, json, Sign(json, "some-other-key"));
 
-            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context);
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
 
             result.TransactionInfo.Should().BeNull();
             result.ActionResult.Should().NotBeNull();
@@ -104,7 +122,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests
             string checksum = Sign(json, context.Settings.PrivateKey);
             SetBody(context, json.Replace("10000", "1", StringComparison.Ordinal), checksum);
 
-            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context);
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
 
             result.TransactionInfo.Should().BeNull();
         }
@@ -116,7 +134,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests
             string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000" }));
             SetBody(context, json, null);
 
-            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context);
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
 
             result.TransactionInfo.Should().BeNull();
             result.ActionResult.Should().NotBeNull();
@@ -131,7 +149,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests
             string json = JsonSerializer.Serialize(payment);
             SetBody(context, json, Sign(json, context.Settings.PrivateKey));
 
-            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context);
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
 
             result.TransactionInfo.Should().BeNull();
         }
@@ -143,7 +161,7 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests
             string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "40000", AcquirerStatusCode = "100" }));
             SetBody(context, json, Sign(json, context.Settings.PrivateKey));
 
-            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context);
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
 
             result.TransactionInfo.Should().BeNull();
         }
