@@ -122,20 +122,29 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests
             ],
         };
 
-        private static PaymentProviderContext<QuickpayCheckoutSettings> CreateContext()
+        internal static PaymentProviderContext<QuickpayCheckoutSettings> CreateContext(PaymentStatus? paymentStatus = null, string? quickpayOrderId = null)
         {
             // Commerce's order and context constructors are internal.
             var state = Create<OrderState>();
             typeof(OrderState).GetProperty(nameof(OrderState.TransactionId))!.SetValue(state, "123");
             typeof(OrderState).GetProperty(nameof(OrderState.OrderNumber))!.SetValue(state, "ORDER-123");
             typeof(OrderState).GetProperty(nameof(OrderState.Id))!.SetValue(state, Guid.Parse("80b44f7c-27fa-4e10-a829-853df45966b1"));
+            typeof(OrderState).GetProperty(nameof(OrderState.TransactionPaymentStatus))!.SetValue(state, paymentStatus);
+            if (quickpayOrderId != null)
+            {
+                var properties = (Umbraco.Commerce.Common.Collections.KeyedCollection<PropertyValue>?)typeof(OrderState).GetProperty("Properties")!.GetValue(state)
+                    ?? new Umbraco.Commerce.Common.Collections.KeyedCollection<PropertyValue>();
+                properties.Add("quickpayOrderId", new PropertyValue(quickpayOrderId, false, false));
+                typeof(OrderState).GetProperty("Properties")!.SetValue(state, properties);
+            }
+
             var order = Create<OrderReadOnly>(state);
             var context = Create<PaymentProviderContext>(order, new Dictionary<string, string>(), null!);
             typeof(PaymentProviderContext).GetProperty(nameof(PaymentProviderContext.HttpContext))!.SetValue(context, new DefaultHttpContext());
             return Create<PaymentProviderContext<QuickpayCheckoutSettings>>(context, new QuickpayCheckoutSettings { ApiKey = "test", PrivateKey = "test-private-key" });
         }
 
-        private static T Create<T>(params object[] arguments) => (T)Activator.CreateInstance(
+        internal static T Create<T>(params object[] arguments) => (T)Activator.CreateInstance(
             typeof(T), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, arguments, null)!;
 
         public class TestLogger : DispatchProxy
