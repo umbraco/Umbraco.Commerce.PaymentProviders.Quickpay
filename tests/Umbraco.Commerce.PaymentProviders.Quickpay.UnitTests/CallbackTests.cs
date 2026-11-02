@@ -165,5 +165,101 @@ namespace Umbraco.Commerce.PaymentProviders.Quickpay.UnitTests
 
             result.TransactionInfo.Should().BeNull();
         }
+    
+
+        [Fact]
+        public async Task Upper_Case_Checksum_Is_Accepted()
+        {
+            var context = CreateContext(PaymentStatus.Initialized);
+            string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000" }));
+            SetBody(context, json, Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(context.Settings.PrivateKey), Encoding.UTF8.GetBytes(json))));
+
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
+
+            result.TransactionInfo.Should().NotBeNull();
+        }
+
+        [Fact]
+        public async Task Checksum_That_Is_Not_Hex_Is_Rejected()
+        {
+            var context = CreateContext(PaymentStatus.Initialized);
+            string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000" }));
+            SetBody(context, json, "not-a-checksum");
+
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
+
+            result.TransactionInfo.Should().BeNull();
+            result.ActionResult.Should().NotBeNull();
+        }
+
+        [Fact]
+        public async Task Checksum_With_An_Empty_Private_Key_Is_Rejected()
+        {
+            var context = CreateContext(PaymentStatus.Initialized);
+            context.Settings.PrivateKey = string.Empty;
+            string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000" }));
+            SetBody(context, json, Sign(json, string.Empty));
+
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
+
+            result.TransactionInfo.Should().BeNull();
+            result.ActionResult.Should().NotBeNull();
+        }
+
+        [Fact]
+        public async Task Payment_Without_Any_Order_Identifier_Is_Ignored()
+        {
+            // No orderReference variable, no Quickpay order ID on the payment, and none stored on the order.
+            var context = CreateContext(PaymentStatus.Initialized);
+            QuickpayPayment payment = Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000" });
+            payment.Variables = new Dictionary<string, string>();
+            payment.OrderId = null!;
+            string json = JsonSerializer.Serialize(payment);
+            SetBody(context, json, Sign(json, context.Settings.PrivateKey));
+
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
+
+            result.TransactionInfo.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task Payment_Matching_The_Stored_Quickpay_Order_Id_Is_Accepted()
+        {
+            var context = PaymentStatusTests.CreateContext(PaymentStatus.Initialized, quickpayOrderId: "ORDER-123");
+            QuickpayPayment payment = Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000" });
+            payment.Variables = new Dictionary<string, string>();
+            payment.OrderId = "ORDER-123";
+            string json = JsonSerializer.Serialize(payment);
+            SetBody(context, json, Sign(json, context.Settings.PrivateKey));
+
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
+
+            result.TransactionInfo.Should().NotBeNull();
+        }
+
+        [Fact]
+        public async Task Acquirer_Approval_Without_Quickpay_Approval_Gives_No_Transaction()
+        {
+            var context = CreateContext(PaymentStatus.Initialized);
+            string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "40000", AcquirerStatusCode = "000" }));
+            SetBody(context, json, Sign(json, context.Settings.PrivateKey));
+
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
+
+            result.TransactionInfo.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task Quickpay_Approval_With_Acquirer_Approval_Is_Authorized()
+        {
+            var context = CreateContext(PaymentStatus.Initialized);
+            string json = JsonSerializer.Serialize(Payment(context, new Operation { Type = "authorize", Amount = 10000, QuickpayStatusCode = "20000", AcquirerStatusCode = "000" }));
+            SetBody(context, json, Sign(json, context.Settings.PrivateKey));
+
+            CallbackResult result = await CreateProvider().ProcessCallbackAsync(context).ConfigureAwait(true);
+
+            result.TransactionInfo.Should().NotBeNull();
+            result.TransactionInfo!.PaymentStatus.Should().Be(PaymentStatus.Authorized);
+        }
     }
 }
